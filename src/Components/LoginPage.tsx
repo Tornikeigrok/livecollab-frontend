@@ -2,8 +2,8 @@ import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useNavigate } from "react-router-dom";
 import { useUser } from "./InfoContext";
-import Cookies from "js-cookie"; //import cookies to see the
-//const cookies = import from js-cookie
+import Cookies from "js-cookie";
+import { apiGet, apiPost } from "../utils/api";
 
 function LoginPage() {
   
@@ -21,21 +21,18 @@ function LoginPage() {
       const token = Cookies.get("token");
       if (!token) {
         setTokenNotFound(true);
-        navigate("/");
+        // Don't redirect - user is on login page to log in
         return;
       }
       try {
-        const res = await fetch("http://localhost:4000/users", {
-          method: "GET",
-          headers: { Authorization: "Bearer " + token },
-        });
+        const res = await apiGet("/users");
         const data = await res.json();
         setFirstname(data.first);
         setLastname(data.last);
-       
+        // User is already logged in, redirect to HomePage
+        navigate("/HomePage");
       } catch (error) {
         setTokenErr(true);
-        navigate("/");
         Cookies.remove("token");
         return;
       }
@@ -76,6 +73,7 @@ function LoginPage() {
   const [forgotError, setForgotError] = useState(false);
   const [lastNotFound, setLastNotFound] = useState(false);
   const [noEmail, setNoEmail] = useState(false);
+  const [registerEmail, setregisterEmail] = useState(false);
 
   const { setEml } = useUser();
  
@@ -99,26 +97,28 @@ function LoginPage() {
     let error = false;
     try {
       setSpin(true);
-      const res = await fetch("http://localhost:4000/authenticate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: user,
-          password: pass,
-        }),
+      const res = await apiPost("/authenticate", {
+        email: user,
+        password: pass,
       });
+      if(res.status === 400){
+          setregisterEmail(true);
+      }
 
       const data = await res.json();
       setStarted(true);
+    
       if (data.success) {
         Cookies.set("token", data.token, { expires: 1 });
         setCorrect(true);
         error = false;
         setNone(false);
+        setregisterEmail(false);
         timer();
         setSpin(false);
         checkCookie();
         expire();
+
       } else {
         setCorrect(false);
         error = true;
@@ -145,6 +145,9 @@ function LoginPage() {
   const moveToLogin = () => {
     setTimeout(() => {
       setActiveTab("login");
+      setStarted(false);
+      setCorrect(false);
+      setNone(false);
     }, 1500);
   };
 
@@ -162,20 +165,17 @@ function LoginPage() {
     try {
       if (!error) {
         setRegSpin(true);
-        const res = await fetch("http://localhost:4000/register", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            email: regEmail,
-            password: regPassword,
-            first: regFirst,
-            last: regLast,
-          }),
+        const res = await apiPost("/register", {
+          email: regEmail,
+          password: regPassword,
+          first: regFirst,
+          last: regLast,
         });
         const data = await res.json();
         if (data.success) {
           setRegCorrect(true);
           setAlreadyEmail(false);
+          setregisterEmail(false);
           moveToLogin();
           setRegSpin(false);
         } else {
@@ -234,14 +234,10 @@ function LoginPage() {
       return;
     }
     try {
-      const res = await fetch("http://localhost:4000/resetpassword", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: forgotEmail,
-          last: forgotLast,
-          password: newPass,
-        }),
+      const res = await apiPost("/resetpassword", {
+        email: forgotEmail,
+        last: forgotLast,
+        password: newPass,
       });
       const data = await res.json();
       if (data.status === 400) {
@@ -279,13 +275,7 @@ function LoginPage() {
 
   const checkCookie = async () => {
     try {
-      const token = Cookies.get("token");
-      const res = await fetch("http://localhost:4000/users", {
-        method: "GET",
-        headers: {
-          Authorization: "Bearer " + token,
-        },
-      });
+      const res = await apiGet("/users");
       const data = await res.json();
       setEml(data.email);
     } catch (error) {
@@ -294,85 +284,159 @@ function LoginPage() {
     }
   };
 
+  const [show, setShow] = useState(false);
+  useEffect(()=>{
+   requestAnimationFrame(()=>{
+     setShow(true);
+   });
+  },[])
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
-      <header className="flex justify-between items-center px-6 py-3 bg-white shadow-sm border-b border-gray-100">
-        <span className="text-2xl font-extrabold tracking-tight text-gray-900">
-          To:collab.
-        </span>
-        <ul className="flex items-center gap-4 relative">
-          <li className="text-lg text-gray-500 hover:text-gray-900 transition-colors duration-200 cursor-pointer flex items-center justify-center p-2 rounded-full">
-            <i className="  text-black border border-gray-300 transition duration-100 hover:cursor-pointer w-12 h-12 hover:bg-gray-100 rounded-3xl flex items-center justify-center fa-regular fa-user text-xl"></i>
-          </li>
+    <div className="min-h-screen flex flex-col bg-stone-50">
+      {/* Header */}
+      <header className="flex justify-between items-center px-4 sm:px-8 lg:px-12 py-4 bg-white/95 backdrop-blur-sm border-b border-stone-200 sticky top-0 z-50">
+        <Link to="/" className="flex items-center gap-2">
+          <div className="w-8 h-8 bg-stone-900 rounded-lg flex items-center justify-center">
+            <span className="text-white font-bold text-sm">T</span>
+          </div>
+          <span className="text-xl sm:text-2xl font-bold tracking-tight text-stone-900">To:collab.</span>
+        </Link>
+        <ul className="flex items-center gap-3">
           <Link
-            className={`flex gap-2 items-center border border-gray-200 px-3 py-1 rounded-lg text-gray-700 font-medium hover:bg-gray-100 transition-colors duration-200 ${
-              !started ? "pointer-events-none opacity-60" : ""
+            className={`flex gap-2 items-center px-3 py-2 rounded-lg text-stone-600 hover:bg-stone-100 hover:text-stone-900 transition-colors text-sm ${
+              !correct ? "pointer-events-none opacity-50" : ""
             }`}
             to={"/HomePage"}
           >
-            Home
+            <i className="fa-solid fa-house text-sm"></i>
+            <span className="hidden sm:inline">Dashboard</span>
           </Link>
           <span className="flex items-center relative">
-            <i
-              className="fa-regular fa-circle-question text-xl text-gray-400 hover:text-gray-700 cursor-pointer transition-colors duration-200"
+            <button
+              className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-stone-100 transition-colors"
               onMouseEnter={() => setInfo(true)}
               onMouseLeave={() => setInfo(false)}
-            ></i>
-            <span
-              className={`absolute right-0 top-8 bg-white border border-gray-200 shadow-lg rounded-lg px-4 py-2 text-xs text-gray-700 z-20 transition-opacity duration-200 ${
-                info ? "opacity-100" : "opacity-0 pointer-events-none"
-              }`}
-              style={{ minWidth: "180px" }}
             >
-              You must be logged in to get on Home page
+              <i className="fa-regular fa-circle-question text-lg text-stone-400 hover:text-stone-600 transition-colors"></i>
+            </button>
+            <span
+              className={`absolute right-0 top-12 bg-white border border-stone-200 shadow-xl rounded-xl px-4 py-3 text-xs text-stone-600 z-20 transition-all duration-200 ${
+                info ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-2 pointer-events-none"
+              }`}
+              style={{ minWidth: "200px" }}
+            >
+              Sign in to access your dashboard
             </span>
           </span>
         </ul>
       </header>
-      <main className="flex flex-col items-center justify-center flex-1 px-2">
-        <div className="max-w-md w-full mx-auto px-4 py-12">
-          <div className="mb-6 text-center">
-            <h2 className="text-lg font-bold text-gray-900 mb-1">
-              Welcome to To:collab.
-            </h2>
-            <p className="text-gray-600 text-sm">
-              Edit documents live with other users. Please log in or create an
-              account to get started.
-            </p>
-          </div>
-          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden transition-all duration-300">
-            <div className="flex border-b border-gray-100">
-              <button
-                onClick={() => setActiveTab("login")}
-                className={`flex-1 py-4 text-sm font-semibold transition-all duration-300 ${
-                  activeTab === "login"
-                    ? "text-gray-900 border-b-2 border-gray-900"
-                    : "text-gray-400 hover:text-gray-600"
-                }`}
-              >
-                Sign In
-              </button>
-              <button
-                onClick={() => setActiveTab("register")}
-                className={`flex-1 py-4 text-sm font-semibold transition-all duration-300 ${
-                  activeTab === "register"
-                    ? "text-gray-900 border-b-2 border-gray-900"
-                    : "text-gray-400 hover:text-gray-600"
-                }`}
-              >
-                Create Account
-              </button>
+      
+      <main className="flex-1 flex flex-col lg:flex-row">
+        {/* Left Side - Brand & Features */}
+        <div className={`relative w-full lg:w-1/2 bg-stone-900 flex items-center justify-center p-8 lg:p-16 overflow-hidden transition-all duration-1000 ${
+          show ? "opacity-100 translate-x-0" : "opacity-0 lg:-translate-x-full"
+        }`}>
+          {/* Decorative elements */}
+          <div className="absolute top-0 right-0 w-96 h-96 bg-stone-800 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl opacity-50"></div>
+          <div className="absolute bottom-0 left-0 w-64 h-64 bg-stone-700 rounded-full translate-y-1/2 -translate-x-1/2 blur-3xl opacity-40"></div>
+          <div className="absolute inset-0 opacity-5" style={{ backgroundImage: 'radial-gradient(circle, #fff 1px, transparent 1px)', backgroundSize: '24px 24px' }}></div>
+          
+          <div className="relative max-w-md">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/10 rounded-full text-sm text-stone-300 mb-8">
+              <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></span>
+              <span>Trusted by creators worldwide</span>
             </div>
+            
+            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white mb-6 leading-tight">
+              Your ideas deserve<br />
+              <span className="text-stone-400">a better home.</span>
+            </h1>
+            <p className="text-base lg:text-lg text-stone-400 mb-10 leading-relaxed">
+              Stop juggling tabs and tools. To:collab brings your team's writing into one beautiful, focused space.
+            </p>
+            
+            <div className="space-y-4">
+              <div className="flex items-center gap-4 p-4 bg-white/5 rounded-xl border border-white/10">
+                <div className="w-10 h-10 bg-white/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <i className="fa-solid fa-feather text-white"></i>
+                </div>
+                <div>
+                  <h3 className="font-semibold text-white text-sm">Distraction-free writing</h3>
+                  <p className="text-xs text-stone-500">Clean interface that lets you focus</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-4 p-4 bg-white/5 rounded-xl border border-white/10">
+                <div className="w-10 h-10 bg-white/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <i className="fa-solid fa-users text-white"></i>
+                </div>
+                <div>
+                  <h3 className="font-semibold text-white text-sm">Join anyone instantly</h3>
+                  <p className="text-xs text-stone-500">Share a code, start collaborating</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-4 p-4 bg-white/5 rounded-xl border border-white/10">
+                <div className="w-10 h-10 bg-white/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <i className="fa-solid fa-shield-halved text-white"></i>
+                </div>
+                <div>
+                  <h3 className="font-semibold text-white text-sm">Your data, your control</h3>
+                  <p className="text-xs text-stone-500">Private and secure by default</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Right Side - Auth Form */}
+        <div className={`w-full lg:w-1/2 flex items-center justify-center p-6 lg:p-12 bg-stone-50 transition-all duration-1000 ${
+          show ? "opacity-100 translate-x-0" : "opacity-0 lg:translate-x-full"
+        }`}>
+          <div className="max-w-md w-full">
+            <div className="mb-8 text-center">
+              <h2 className="text-2xl sm:text-3xl font-bold text-stone-900 mb-2">
+                {showForgot ? "Reset your password" : activeTab === "login" ? "Welcome back" : "Create your account"}
+              </h2>
+              <p className="text-stone-500 text-sm">
+                {showForgot 
+                  ? "We'll help you get back in" 
+                  : activeTab === "login" 
+                  ? "Sign in to continue to your workspace" 
+                  : "Start collaborating using To:collab"}
+              </p>
+            </div>
+            
+            <div className="bg-white rounded-2xl shadow-xl border border-stone-200 overflow-hidden">
+              {/* Tabs */}
+              <div className="flex border-b border-stone-100">
+                <button
+                  onClick={() => { setActiveTab("login"); setShowForgot(false); }}
+                  className={`flex-1 py-4 text-sm font-semibold transition-all ${
+                    activeTab === "login" && !showForgot
+                      ? "text-stone-900 bg-white border-b-2 border-stone-900"
+                      : "text-stone-400 hover:text-stone-600 bg-stone-50"
+                  }`}
+                >
+                  Sign In
+                </button>
+                <button
+                  onClick={() => { setActiveTab("register"); setShowForgot(false); }}
+                  className={`flex-1 py-4 text-sm font-semibold transition-all ${
+                    activeTab === "register"
+                      ? "text-stone-900 bg-white border-b-2 border-stone-900"
+                      : "text-stone-400 hover:text-stone-600 bg-stone-50"
+                  }`}
+                >
+                  Create Account
+                </button>
+              </div>
 
             <div
               className={`relative ${
-                activeTab === "register" ? "min-h-[600px]" : "min-h-[430px]"
+                activeTab === "register" ? "min-h-[580px]" : "min-h-[400px]"
               }`}
             >
-              <div className={`${showForgot && "min-h-[620px]"}`}></div>
+              <div className={`${showForgot && "min-h-[580px]"}`}></div>
 
-              {/* This is "LOGIN" section  ----------------------------------------------------------------*/}
-
+              {/* LOGIN Section */}
               <div
                 className={`absolute top-0 left-0 w-full transition-transform duration-300 ${
                   activeTab === "login" ? "translate-x-0" : "-translate-x-full"
@@ -393,7 +457,7 @@ function LoginPage() {
                     }}
                   >
                     <div>
-                      <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">
+                      <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-2">
                         Email
                       </label>
                       <input
@@ -401,11 +465,11 @@ function LoginPage() {
                         required
                         type="email"
                         placeholder="you@example.com"
-                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-gray-900 focus:border-transparent outline-none transition-all duration-300 text-sm"
+                        className="w-full px-4 py-3.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-stone-900 focus:border-transparent outline-none transition-all bg-stone-50 text-sm"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">
+                      <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-2">
                         Password
                       </label>
                       <input
@@ -413,7 +477,7 @@ function LoginPage() {
                         required
                         type="password"
                         placeholder="••••••••"
-                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-gray-900 focus:border-transparent outline-none transition-all duration-300 text-sm"
+                        className="w-full px-4 py-3.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-stone-900 focus:border-transparent outline-none transition-all bg-stone-50 text-sm"
                         autoComplete="off"
                       />
                     </div>
@@ -421,32 +485,36 @@ function LoginPage() {
                       <label className="flex items-center gap-2 cursor-pointer">
                         <input
                           type="checkbox"
-                          className="w-4 h-4 accent-gray-900 rounded"
+                          className="w-4 h-4 accent-stone-900 rounded"
                         />
-                        <span className="text-gray-600">Remember me</span>
+                        <span className="text-stone-500">Remember me</span>
                       </label>
                       <button
                         type="button"
                         onClick={handleShowForgot}
-                        className="text-gray-900 font-semibold hover:underline bg-transparent border-none p-0 m-0"
+                        className="text-stone-900 font-semibold hover:underline bg-transparent border-none p-0"
                       >
                         Forgot password?
                       </button>
                     </div>
                     <button
                       type="submit"
-                      className="w-full bg-gray-900 text-white py-3 rounded-xl font-semibold hover:bg-gray-700 transition-all duration-300 shadow-lg hover:shadow-xl"
+                      className="w-full bg-stone-900 text-white py-3.5 rounded-xl font-semibold hover:bg-stone-800 transition-colors"
                     >
-                      Sign In
+                      {spin ? <i className="fa-solid fa-spinner animate-spin"></i> : "Sign In"}
                     </button>
                   </form>
                 ) : (
-                  <form onSubmit={reset} className="space-y-5 p-6 sm:p-8">
-                    <h3 className="text-lg font-bold text-gray-900 mb-2">
-                      Reset Password
-                    </h3>
+                  <form onSubmit={reset} className="space-y-4 p-6 sm:p-8">
+                    <div className="text-center mb-4">
+                      <div className="w-12 h-12 bg-stone-100 rounded-xl flex items-center justify-center mx-auto mb-3">
+                        <i className="fa-solid fa-key text-stone-600"></i>
+                      </div>
+                      <h3 className="text-lg font-bold text-stone-900">Reset Password</h3>
+                      <p className="text-xs text-stone-500">Enter your email and last name to verify</p>
+                    </div>
                     <div>
-                      <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">
+                      <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-2">
                         Email
                       </label>
                       <input
@@ -454,126 +522,115 @@ function LoginPage() {
                         onChange={(e) => setForgotEmail(e.target.value)}
                         type="email"
                         placeholder="you@example.com"
-                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-gray-900 focus:border-transparent outline-none transition-all duration-300 text-sm"
+                        className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-stone-900 focus:border-transparent outline-none transition-all bg-stone-50 text-sm"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">
+                      <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-2">
                         Last Name
                       </label>
                       <input
                         required
                         onChange={(e) => setForgotLast(e.target.value)}
                         type="text"
-                        placeholder="Your Last Name"
-                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-gray-900 focus:border-transparent outline-none transition-all duration-300 text-sm"
+                        placeholder="Your last name"
+                        className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-stone-900 focus:border-transparent outline-none transition-all bg-stone-50 text-sm"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">
+                      <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-2">
                         New Password
                       </label>
                       <input
                         required
                         onChange={(e) => setNewPass(e.target.value)}
                         type="password"
-                        placeholder="New Password"
-                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-gray-900 focus:border-transparent outline-none transition-all duration-300 text-sm"
+                        placeholder="New password"
+                        className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-stone-900 focus:border-transparent outline-none transition-all bg-stone-50 text-sm"
                         autoComplete="new-password"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">
-                        Confirm New Password
+                      <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-2">
+                        Confirm Password
                       </label>
                       <input
                         required
                         onChange={(e) => setConfNewPass(e.target.value)}
                         type="password"
-                        placeholder="Confirm New Password"
-                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-gray-900 focus:border-transparent outline-none transition-all duration-300 text-sm"
+                        placeholder="Confirm new password"
+                        className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-stone-900 focus:border-transparent outline-none transition-all bg-stone-50 text-sm"
                         autoComplete="new-password"
                       />
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-3 pt-2">
                       <button
                         type="button"
                         onClick={handleBackFromForgot}
-                        className="w-1/2 bg-gray-200 text-gray-900 py-3 rounded-xl font-semibold hover:bg-gray-300 transition-all duration-300 shadow hover:shadow"
+                        className="w-1/3 bg-stone-100 text-stone-700 py-3 rounded-xl font-semibold hover:bg-stone-200 transition-colors"
                       >
                         Back
                       </button>
                       <button
                         type="submit"
-                        className="w-1/2 bg-gray-900 text-white py-3 rounded-xl font-semibold hover:bg-gray-700 transition-all duration-300 shadow-lg hover:shadow-xl"
+                        className="w-2/3 bg-stone-900 text-white py-3 rounded-xl font-semibold hover:bg-stone-800 transition-colors"
                       >
                         Reset Password
                       </button>
                     </div>
-                    <div className="flex items-center justify-center w-full min-h-[40px]">
+                    <div className="flex items-center justify-center w-full min-h-[36px]">
                       {passChanged ? (
-                        <span className="flex items-center gap-2 text-green-600 font-medium text-sm mt-2">
-                          <i className="fa-solid fa-circle-check text-green-500"></i>{" "}
-                          Password was successfully changed!
+                        <span className="flex items-center gap-2 text-emerald-600 font-medium text-sm">
+                          <i className="fa-solid fa-circle-check"></i> Password updated successfully!
                         </span>
                       ) : forgot_pass_mismatch ? (
-                        <span className="flex items-center gap-2 text-red-500 font-medium text-sm mt-2">
-                          <i className="fa-solid fa-circle-exclamation text-red-400"></i>{" "}
-                          Passwords do not match!
+                        <span className="flex items-center gap-2 text-red-500 font-medium text-sm">
+                          <i className="fa-solid fa-circle-exclamation"></i> Passwords don't match
                         </span>
                       ) : forgotError ? (
-                        <span className="flex items-center gap-2 text-red-500 font-medium text-sm mt-2">
-                          <i className="fa-solid fa-circle-exclamation text-red-400"></i>{" "}
-                          Reset failed. Please try again.
+                        <span className="flex items-center gap-2 text-red-500 font-medium text-sm">
+                          <i className="fa-solid fa-circle-exclamation"></i> Something went wrong
                         </span>
                       ) : lastNotFound ? (
-                        <span className="flex items-center gap-2 text-red-500 font-medium text-sm mt-2">
-                          <i className="fa-solid fa-circle-exclamation text-red-400"></i>{" "}
-                          Last name not found in our database
+                        <span className="flex items-center gap-2 text-red-500 font-medium text-sm">
+                          <i className="fa-solid fa-circle-exclamation"></i> Last name not found
                         </span>
                       ) : noEmail ? (
-                        <span className="flex items-center gap-2 text-red-500 font-medium text-sm mt-2">
-                          <i className="fa-solid fa-circle-exclamation text-red-400"></i>{" "}
-                          Email not in our database
+                        <span className="flex items-center gap-2 text-red-500 font-medium text-sm">
+                          <i className="fa-solid fa-circle-exclamation"></i> Email not registered
                         </span>
                       ) : null}
                     </div>
                   </form>
                 )}
 
-                <div
-                  className={`flex items-center justify-center flex-col gap-2`}
-                >
-                  {!showForgot &&
+                <div className="flex items-center justify-center flex-col gap-2 pb-6">
+                  {!registerEmail && !showForgot &&
                     started &&
                     (correct ? (
-                      <span className="flex items-center gap-2 text-green-600 font-medium text-sm mt-2">
-                        <i className="fa-solid fa-circle-check text-green-500"></i>{" "}
-                        Successful Login.
+                      <span className="flex items-center gap-2 text-emerald-600 font-medium text-sm">
+                        <i className="fa-solid fa-circle-check"></i> Welcome back!
                       </span>
                     ) : (
-                      <span className="flex items-center gap-2 text-red-500 font-medium text-sm mt-2">
-                        <i className="fa-solid fa-circle-exclamation text-red-400"></i>{" "}
-                        Invalid Credentials
+                      <span className="flex items-center gap-2 text-red-500 font-medium text-sm">
+                        <i className="fa-solid fa-circle-exclamation"></i> Invalid credentials
                       </span>
                     ))}
                   {!showForgot && none && (
-                    <span className="flex items-center gap-2 text-red-500 font-medium text-sm mt-2">
-                      <i className="fa-solid fa-circle-exclamation text-red-400"></i>{" "}
-                      Please Register.
+                    <span className="flex items-center gap-2 text-red-500 font-medium text-sm">
+                      <i className="fa-solid fa-circle-exclamation"></i> Account not found
                     </span>
                   )}
-                  {!showForgot && (
-                    <span
-                      className={`${
-                        spin ? "block" : "hidden"
-                      } animate-spin border-2 border-t border-t-blue-500 rounded-3xl w-8 h-8`}
-                    ></span>
+                  {registerEmail && (
+                    <span className="flex items-center justify-center text-red-500 text-sm">
+                      <i className="fa-solid fa-circle-exclamation mr-2"></i>
+                      Email not found. Please create an account.
+                    </span>
                   )}
                 </div>
               </div>
 
-              {/* This is "Register" section */}
+              {/* REGISTER Section */}
               <div
                 className={`absolute top-0 left-0 w-full transition-transform duration-300 ${
                   activeTab === "register"
@@ -583,7 +640,7 @@ function LoginPage() {
               >
                 <form
                   onSubmit={validateRegister}
-                  className={`space-y-5 p-6 sm:p-8 ${
+                  className={`space-y-4 p-6 sm:p-8 ${
                     shake ? "animate-shake" : ""
                   }`}
                   style={{
@@ -591,34 +648,34 @@ function LoginPage() {
                     animationTimingFunction: "ease-in-out",
                   }}
                 >
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">
+                      <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-2">
                         First Name
                       </label>
                       <input
                         onChange={(e) => setRegFirst(e.target.value)}
                         required
                         type="text"
-                        placeholder="First Name"
-                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-gray-900 focus:border-transparent outline-none transition-all duration-300 text-sm"
+                        placeholder="John"
+                        className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-stone-900 focus:border-transparent outline-none transition-all bg-stone-50 text-sm"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">
+                      <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-2">
                         Last Name
                       </label>
                       <input
                         onChange={(e) => setRegLast(e.target.value)}
                         required
                         type="text"
-                        placeholder="Last Name"
-                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-gray-900 focus:border-transparent outline-none transition-all duration-300 text-sm"
+                        placeholder="Doe"
+                        className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-stone-900 focus:border-transparent outline-none transition-all bg-stone-50 text-sm"
                       />
                     </div>
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">
+                    <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-2">
                       Email
                     </label>
                     <input
@@ -626,11 +683,11 @@ function LoginPage() {
                       required
                       type="email"
                       placeholder="you@example.com"
-                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-gray-900 focus:border-transparent outline-none transition-all duration-300 text-sm"
+                      className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-stone-900 focus:border-transparent outline-none transition-all bg-stone-50 text-sm"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">
+                    <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-2">
                       Password
                     </label>
                     <input
@@ -638,11 +695,11 @@ function LoginPage() {
                       required
                       type="password"
                       placeholder="••••••••"
-                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-gray-900 focus:border-transparent outline-none transition-all duration-300 text-sm"
+                      className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-stone-900 focus:border-transparent outline-none transition-all bg-stone-50 text-sm"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">
+                    <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-2">
                       Confirm Password
                     </label>
                     <input
@@ -650,70 +707,66 @@ function LoginPage() {
                       required
                       type="password"
                       placeholder="••••••••"
-                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-gray-900 focus:border-transparent outline-none transition-all duration-300 text-sm"
+                      className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-stone-900 focus:border-transparent outline-none transition-all bg-stone-50 text-sm"
                     />
                   </div>
-                  <label className="flex items-start gap-2 cursor-pointer text-sm">
+                  <label className="flex items-start gap-2 cursor-pointer text-sm pt-1">
                     <input
                       required
                       type="checkbox"
-                      className="w-4 h-4 accent-gray-900 rounded mt-0.5"
+                      className="w-4 h-4 accent-stone-900 rounded mt-0.5"
                     />
-                    <span className="text-gray-600">
+                    <span className="text-stone-500">
                       I agree to the{" "}
-                      <a
-                        href="#"
-                        className="text-gray-900 font-semibold hover:underline"
-                      >
-                        Terms of Service
+                      <a href="#" className="text-stone-900 font-semibold hover:underline">
+                        Terms
                       </a>{" "}
                       and{" "}
-                      <a
-                        href="#"
-                        className="text-gray-900 font-semibold hover:underline"
-                      >
+                      <a href="#" className="text-stone-900 font-semibold hover:underline">
                         Privacy Policy
                       </a>
                     </span>
                   </label>
                   <button
                     type="submit"
-                    className="w-full bg-gray-900 text-white py-3 rounded-xl font-semibold hover:bg-gray-700 transition-all duration-300 shadow-lg hover:shadow-xl"
+                    className="w-full bg-stone-900 text-white py-3.5 rounded-xl font-semibold hover:bg-stone-800 transition-colors"
                   >
-                    Create Account
+                    {regSpin ? <i className="fa-solid fa-spinner animate-spin"></i> : "Create Account"}
                   </button>
-                  {wrongPas ? (
-                    <span className="flex items-center gap-2 text-red-500 font-medium text-sm mt-2">
-                      <i className="fa-solid fa-circle-exclamation text-red-400"></i>{" "}
-                      Passwords do not match!
-                    </span>
-                  ) : alreadyEmail ? (
-                    <span className="flex items-center gap-2 text-red-500 font-medium text-sm mt-2">
-                      <i className="fa-solid fa-circle-exclamation text-red-400"></i>{" "}
-                      Email already exists
-                    </span>
-                  ) : regCorrect ? (
-                    <span className="flex items-center gap-2 text-green-600 font-medium text-sm mt-2">
-                      <i className="fa-solid fa-circle-check text-green-500"></i>{" "}
-                      Account was created successfully
-                    </span>
-                  ) : null}
-                  <div className="flex items-center justify-center w-full">
-                    <span
-                      className={`${
-                        regSpin ? "block" : "hidden"
-                      } animate-spin border-2 border-t border-t-blue-500 rounded-3xl w-8 h-8`}
-                    ></span>
+                  <div className="flex items-center justify-center min-h-[36px]">
+                    {wrongPas ? (
+                      <span className="flex items-center gap-2 text-red-500 font-medium text-sm">
+                        <i className="fa-solid fa-circle-exclamation"></i> Passwords don't match
+                      </span>
+                    ) : alreadyEmail ? (
+                      <span className="flex items-center gap-2 text-red-500 font-medium text-sm">
+                        <i className="fa-solid fa-circle-exclamation"></i> Email already registered
+                      </span>
+                    ) : regCorrect ? (
+                      <span className="flex items-center gap-2 text-emerald-600 font-medium text-sm">
+                        <i className="fa-solid fa-circle-check"></i> Account created! Redirecting...
+                      </span>
+                    ) : null}
                   </div>
                 </form>
               </div>
-              {/* Divider and Social Login (always visible below forms) */}
             </div>
           </div>
         </div>
-      </main>
-      <footer className="w-full py-4 bg-white border-t border-gray-100 text-center text-xs text-gray-500 font-medium tracking-wide shadow-sm">
-        © {new Date().getFullYear()} To:collab. All rights reserved.
+      </div>
+    </main>
+
+      {/* Footer */}
+      <footer className="px-4 sm:px-8 lg:px-12 py-6 bg-white border-t border-stone-200">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-stone-500">
+          <div className="flex items-center gap-2">
+            <div className="w-5 h-5 bg-stone-900 rounded flex items-center justify-center">
+              <span className="text-white font-bold text-xs">T</span>
+            </div>
+            <span className="font-semibold text-stone-700">To:collab.</span>
+          </div>
+          <span className="text-xs text-stone-400">© {new Date().getFullYear()} All rights reserved.</span>
+        </div>
       </footer>
     </div>
   );
