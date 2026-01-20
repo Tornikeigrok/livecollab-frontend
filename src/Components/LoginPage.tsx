@@ -292,6 +292,21 @@ function LoginPage() {
   },[])
   return (
     <div className="min-h-screen flex flex-col bg-stone-50">
+      {/* Demo credentials banner for recruiters */}
+      <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 px-4 py-2.5">
+        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-4 text-white text-sm">
+          <span className="flex items-center gap-2">
+            <i className="fa-solid fa-user-tie text-xs"></i>
+            <span className="font-medium">Demo Account:</span>
+          </span>
+          <span className="flex items-center gap-3 font-mono text-emerald-100">
+            <span>demopass@gmail.com</span>
+            <span className="text-emerald-300">|</span>
+            <span>Demo1234!</span>
+          </span>
+        </div>
+      </div>
+
       {/* Header */}
       <header className="flex justify-between items-center px-4 sm:px-8 lg:px-12 py-4 bg-white/95 backdrop-blur-sm border-b border-stone-200 sticky top-0 z-50">
         <Link to="/" className="flex items-center gap-2">
@@ -431,7 +446,7 @@ function LoginPage() {
 
             <div
               className={`relative ${
-                activeTab === "register" ? "min-h-[580px]" : "min-h-[400px]"
+                activeTab === "register" || showForgot ? "min-h-[660px]" : "min-h-[400px]"
               }`}
             >
               <div className={`${showForgot && "min-h-[580px]"}`}></div>
