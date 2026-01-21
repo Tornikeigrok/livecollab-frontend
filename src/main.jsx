@@ -7,7 +7,6 @@ import { Analytics } from '@vercel/analytics/react'
 
 createRoot(document.getElementById('root')).render(
  <BrowserRouter>
-
     <App />
    <Analytics />
  </BrowserRouter>
